@@ -3,7 +3,7 @@ package event
 import (
 	"fmt"
 
-	"github.com/oddcancer/events"
+	"github.com/oddengine/events"
 )
 
 // Event types.

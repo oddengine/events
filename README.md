@@ -34,7 +34,7 @@ func (me *Observer) Init(logger log.ILogger) *Observer {
     return me
 }
 
-func (me *Observer) Attach(t *Target) {
+func (me *Observer) Watch(t *Target) {
     t.AddEventListener(Event.CLOSE, me.closeListener)
 }
 
@@ -45,21 +45,15 @@ func (me *Observer) onClose(e *Event.Event) {
 ```
 
 ```go
-var logger log.ILogger
-
-func onClose(e *Event.Event) {
-    t := e.Target().(*Target)
-    logger.Infof("Target(%s) closed.", t.ID)
-}
-
 func main() {
-    listener := events.NewEventListener(onClose)
+    // Learn how to create a logger here:
+    //   https://github.com/oddengine/log
+    var logger log.ILogger
 
     t := new(Target).Init("123", logger)
-    t.AddEventListener(Event.CLOSE, listener)
 
     o := new(Observer).Init(logger)
-    o.Attach(t)
+    o.Watch(t)
 
     t.Close()
 }

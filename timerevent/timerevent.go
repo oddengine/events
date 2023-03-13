@@ -3,8 +3,8 @@ package timerevent
 import (
 	"fmt"
 
-	"github.com/oddcancer/events"
-	Event "github.com/oddcancer/events/event"
+	"github.com/oddengine/events"
+	Event "github.com/oddengine/events/event"
 )
 
 // TimerEvent types.

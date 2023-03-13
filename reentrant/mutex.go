@@ -4,11 +4,17 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // Static constants.
 const (
 	MAX_RECURSION int32 = 0
+)
+
+var (
+	DEBUG_DEADLOCK   = false
+	DEADLOCK_TIMEOUT = 5 * time.Second
 )
 
 // A Mutex is a reentrant mutual exclusion lock.
@@ -36,7 +42,27 @@ func (me *Mutex) Lock() {
 		return
 	}
 
+	var c chan bool
+	if DEBUG_DEADLOCK {
+		c = make(chan bool)
+		go func(c chan bool) {
+			t := time.NewTicker(DEADLOCK_TIMEOUT)
+			defer func() {
+				t.Stop()
+				close(c)
+			}()
+
+			select {
+			case <-c:
+			case <-t.C:
+				panic(fmt.Errorf("deadlock timeout %p", me))
+			}
+		}(c)
+	}
 	me.Mutex.Lock()
+	if DEBUG_DEADLOCK {
+		c <- true
+	}
 	atomic.StoreInt64(&me.goid, self)
 	me.recursion = 1
 }
@@ -47,8 +73,7 @@ func (me *Mutex) Lock() {
 // is not associated with a particular goroutine. It is allowed for one goroutine
 // to lock a Mutex and then arrange for another goroutine to unlock it.
 func (me *Mutex) Unlock() {
-	me.recursion--
-	if me.recursion == 0 {
+	if atomic.AddInt32(&me.recursion, -1) == 0 {
 		atomic.StoreInt64(&me.goid, 0)
 		me.Mutex.Unlock()
 	}

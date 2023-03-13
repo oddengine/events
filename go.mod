@@ -1,7 +1,5 @@
-module github.com/oddcancer/events
+module github.com/oddengine/events
 
-go 1.17
+go 1.16
 
-replace github.com/oddcancer/log => ../log
-
-require github.com/oddcancer/log v0.0.0-00010101000000-000000000000
+require github.com/oddengine/log v0.0.0-20230313074506-0902dd3886fa

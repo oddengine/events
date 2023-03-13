@@ -3,10 +3,9 @@ package events
 import (
 	"fmt"
 	"runtime/debug"
-	"unsafe"
 
-	"github.com/oddcancer/events/reentrant"
-	"github.com/oddcancer/log"
+	"github.com/oddengine/events/reentrant"
+	"github.com/oddengine/log"
 )
 
 // Static constants.
@@ -19,17 +18,16 @@ const (
 // However, it is possible to clone the listener group fast while triggering an event.
 // And, the frequency of triggering event is much higher than that of add/remove.
 type EventTarget struct {
-	mtx reentrant.Mutex
-
+	mtx       reentrant.Mutex
 	logger    log.ILogger
-	listeners map[string]map[uintptr]*EventListener
+	listeners map[string]*MappableEventListenerCollection
 	recursion int32
 }
 
 // Init this class.
 func (me *EventTarget) Init(logger log.ILogger) *EventTarget {
 	me.logger = logger
-	me.listeners = make(map[string]map[uintptr]*EventListener)
+	me.listeners = make(map[string]*MappableEventListenerCollection)
 	return me
 }
 
@@ -42,18 +40,15 @@ func (me *EventTarget) AddEventListener(event string, listener *EventListener) {
 
 	me.mtx.Lock()
 	defer me.mtx.Unlock()
-	me.addEventListener(event, listener)
-}
 
-func (me *EventTarget) addEventListener(event string, listener *EventListener) {
 	m := me.listeners[event]
 	if m == nil {
-		m = make(map[uintptr]*EventListener)
+		m = new(MappableEventListenerCollection).Init()
 		me.listeners[event] = m
 	}
 
 	me.logger.Debugf(1, "Adding event listener: type=%s, listener=%p", event, listener)
-	m[uintptr(unsafe.Pointer(listener))] = listener
+	m.Add(listener)
 }
 
 // RemoveEventListener removes an event listener from the EventTarget object.
@@ -65,10 +60,7 @@ func (me *EventTarget) RemoveEventListener(event string, listener *EventListener
 
 	me.mtx.Lock()
 	defer me.mtx.Unlock()
-	me.removeEventListener(event, listener)
-}
 
-func (me *EventTarget) removeEventListener(event string, listener *EventListener) {
 	m := me.listeners[event]
 	if m == nil {
 		me.logger.Debugf(0, "No listener[s] found: type=%s", event)
@@ -76,7 +68,7 @@ func (me *EventTarget) removeEventListener(event string, listener *EventListener
 	}
 
 	me.logger.Debugf(1, "Removing event listener: type=%s, listener=%p", event, listener)
-	delete(m, uintptr(unsafe.Pointer(listener)))
+	m.Remove(listener, me.recursion == 0)
 }
 
 // DispatchEvent dispatches an event into the event flow.
@@ -104,24 +96,25 @@ func (me *EventTarget) DispatchEvent(e IEvent) EventResult {
 		panic(fmt.Sprintf("max recursion reached: %d", me.recursion))
 	}
 
-	// Make a copy of the typed listener map.
+	// Get the typed listener collection.
 	m := me.listeners[e.Type()]
 	if m == nil {
 		me.logger.Debugf(0, "No listener[s] found: type=%s", e.Type())
 		return NotCanceled
 	}
-	c := make(map[uintptr]*EventListener, len(m))
-	for i := range m {
-		c[i] = m[i]
+
+	if me.recursion == 1 {
+		defer m.RemoveEventually()
 	}
 
 	// Loop to invoke the handlers.
-	for _, listener := range c {
+	for element := m.List.Front(); element != nil; element = m.Next(element) {
+		listener := element.Value.(*EventListener)
 		listener.Invoke(e)
 
 		if listener.options.Once {
 			me.logger.Debugf(1, "Removing event listener: type=%s, listener=%p", e.Type(), listener)
-			delete(m, uintptr(unsafe.Pointer(listener)))
+			m.Remove(listener, me.recursion == 0)
 		}
 		if e.PropagationStopped() {
 			me.logger.Debugf(1, "Propagation stopped: type=%s", e.Type())
