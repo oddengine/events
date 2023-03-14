@@ -92,8 +92,8 @@ func (me *MappableEventListenerCollection) RemoveEventually() {
 	for key, e := range me.removed {
 		me.List.Remove(e)
 		delete(me.elements, key)
-		delete(me.removed, key)
 	}
+	me.removed = make(map[uintptr]*list.Element)
 }
 
 // Len returns the number of elements of collection.
