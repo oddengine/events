@@ -1,6 +1,6 @@
 # events
 
-Golang event-driven module with reentrant mutex.
+Observer-Pattern event-driven module with reentrant mutex in Golang.
 
 ## Example
 
